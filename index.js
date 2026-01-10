@@ -1,4 +1,3 @@
-// index.js
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,12 +22,7 @@ app.get('/', (req, res) => {
     res.json({ 
         status: 'online', 
         queueSize: commandQueue.length,
-        message: 'Roblox Ban System API',
-        endpoints: {
-            ban: 'POST /ban',
-            checkbans: 'POST /checkbans',
-            queue: 'GET /queue'
-        }
+        message: 'Roblox Ban System API'
     });
 });
 
@@ -36,54 +30,62 @@ app.post('/ban', (req, res) => {
     console.log('Received ban request:', req.body);
     
     if (req.body.secret !== SECRET) {
-        console.log('❌ Invalid secret provided');
         return res.status(403).json({ error: 'Invalid secret' });
     }
     
-    if (!req.body.action || !req.body.userId) {
-        console.log('❌ Missing action or userId');
-        return res.status(400).json({ error: 'Missing action or userId' });
+    if (!req.body.action) {
+        return res.status(400).json({ error: 'Missing action' });
     }
     
-    if (!['ban', 'unban'].includes(req.body.action)) {
-        console.log('❌ Invalid action:', req.body.action);
-        return res.status(400).json({ error: 'Invalid action. Must be "ban" or "unban"' });
+    if (req.body.action === 'unbanall') {
+        commandQueue.push({
+            action: 'unbanall',
+            timestamp: Date.now()
+        });
+        console.log('✅ Added unban all command');
+        return res.json({ success: true, message: 'Unban all command queued' });
     }
     
-    commandQueue.push({
+    if (!req.body.userId) {
+        return res.status(400).json({ error: 'Missing userId' });
+    }
+    
+    if (!['ban', 'tempban', 'unban'].includes(req.body.action)) {
+        return res.status(400).json({ error: 'Invalid action' });
+    }
+    
+    const command = {
         action: req.body.action,
         userId: req.body.userId,
         reason: req.body.reason || 'No reason provided',
         timestamp: Date.now()
-    });
+    };
+    
+    if (req.body.action === 'tempban') {
+        command.duration = req.body.duration;
+        command.expiresAt = Date.now() + req.body.duration;
+    }
+    
+    commandQueue.push(command);
     
     console.log(`✅ Added ${req.body.action} command for user ${req.body.userId}`);
-    console.log(`   Reason: ${req.body.reason || 'No reason provided'}`);
     console.log(`📊 Queue size: ${commandQueue.length}`);
     
     res.json({ 
         success: true, 
-        message: `User ${req.body.userId} ${req.body.action}ned successfully`,
-        queueSize: commandQueue.length
+        message: `User ${req.body.userId} ${req.body.action}ned successfully`
     });
 });
 
 app.post('/checkbans', (req, res) => {
-    console.log('🎮 Roblox server checking for commands...');
-    
     if (req.body.secret !== SECRET) {
-        console.log('❌ Invalid secret provided from Roblox');
         return res.status(403).json({ error: 'Invalid secret' });
     }
     
     const commands = [...commandQueue];
-    
     commandQueue = [];
     
-    console.log(`✅ Sent ${commands.length} commands to Roblox server`);
-    if (commands.length > 0) {
-        console.log('Commands:', commands);
-    }
+    console.log(`✅ Sent ${commands.length} commands to Roblox`);
     
     res.json(commands);
 });
@@ -95,34 +97,8 @@ app.get('/queue', (req, res) => {
     });
 });
 
-app.post('/clear-queue', (req, res) => {
-    if (req.body.secret !== SECRET) {
-        return res.status(403).json({ error: 'Invalid secret' });
-    }
-    
-    const clearedCount = commandQueue.length;
-    commandQueue = [];
-    
-    console.log(`🗑️ Cleared ${clearedCount} commands from queue`);
-    
-    res.json({ 
-        success: true, 
-        message: `Cleared ${clearedCount} commands from queue` 
-    });
-});
-
-app.use((req, res) => {
-    res.status(404).json({ error: 'Endpoint not found' });
-});
-
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`🔑 Secret key: ${SECRET}`);
-    console.log(`📡 Endpoints ready:`);
-    console.log(`   GET  / - Health check`);
-    console.log(`   POST /ban - Discord bot commands`);
-    console.log(`   POST /checkbans - Roblox polling`);
-    console.log(`   GET  /queue - View queue`);
 });
 
 process.on('SIGTERM', () => {
