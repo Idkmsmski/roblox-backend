@@ -44,7 +44,7 @@ app.post('/ban', (req, res) => {
             action: 'unbanall',
             timestamp: Date.now()
         });
-        banDatabase = {};
+        // Don't clear banDatabase here - wait for Roblox confirmation
         console.log('✅ Added unban all command');
         return res.json({ success: true, message: 'Unban all command queued' });
     }
@@ -93,6 +93,17 @@ app.post('/ban', (req, res) => {
         success: true, 
         message: `User ${req.body.userId} ${req.body.action}ned successfully`
     });
+});
+
+app.post('/confirm-unbanall', (req, res) => {
+    if (req.body.secret !== SECRET) {
+        return res.status(403).json({ error: 'Invalid secret' });
+    }
+    
+    banDatabase = {};
+    console.log('✅ Confirmed unbanall - cleared ban database');
+    
+    res.json({ success: true });
 });
 
 app.post('/banlist', (req, res) => {
