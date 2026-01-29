@@ -18,19 +18,39 @@ const SECRET = "ZpwHC?h!ZL09n8&_g-3$P32u£o";
 
 let commandQueue = [];
 let banDatabase = {};
-let currentPlayers = []; // Store current players in the game
+let serverPlayerData = {}; // Store players by server JobId
+
+// Clean up inactive servers (servers that haven't updated in 2 minutes)
+setInterval(() => {
+    const now = Date.now();
+    const timeout = 120000; // 2 minutes
+    
+    for (const [jobId, serverData] of Object.entries(serverPlayerData)) {
+        if (now - serverData.lastUpdate > timeout) {
+            console.log(`🗑️ Removing inactive server: ${jobId}`);
+            delete serverPlayerData[jobId];
+        }
+    }
+}, 60000); // Run every minute
 
 app.get('/', (req, res) => {
+    // Count total players across all servers
+    let totalPlayers = 0;
+    for (const serverData of Object.values(serverPlayerData)) {
+        totalPlayers += serverData.players.length;
+    }
+    
     res.json({ 
         status: 'online', 
         queueSize: commandQueue.length,
         totalBans: Object.keys(banDatabase).length,
-        currentPlayers: currentPlayers.length,
+        currentPlayers: totalPlayers,
+        activeServers: Object.keys(serverPlayerData).length,
         message: 'Roblox Ban System API'
     });
 });
 
-// New endpoint to receive player list from Roblox
+// New endpoint to receive player list from Roblox (with JobId to identify server)
 app.post('/updateplayers', (req, res) => {
     if (req.body.secret !== SECRET) {
         return res.status(403).json({ error: 'Invalid secret' });
@@ -40,25 +60,72 @@ app.post('/updateplayers', (req, res) => {
         return res.status(400).json({ error: 'Players must be an array' });
     }
     
-    currentPlayers = req.body.players;
-    console.log(`👥 Updated player list - ${currentPlayers.length} players online`);
+    if (!req.body.jobId) {
+        return res.status(400).json({ error: 'JobId required' });
+    }
+    
+    const jobId = req.body.jobId;
+    
+    serverPlayerData[jobId] = {
+        players: req.body.players,
+        lastUpdate: Date.now()
+    };
+    
+    // Count total players
+    let totalPlayers = 0;
+    for (const serverData of Object.values(serverPlayerData)) {
+        totalPlayers += serverData.players.length;
+    }
+    
+    console.log(`👥 Updated server ${jobId.substring(0, 8)}... - ${req.body.players.length} players (Total: ${totalPlayers} across ${Object.keys(serverPlayerData).length} servers)`);
     
     res.json({ 
         success: true, 
-        playerCount: currentPlayers.length 
+        playerCount: req.body.players.length,
+        totalPlayers: totalPlayers,
+        activeServers: Object.keys(serverPlayerData).length
     });
 });
 
-// New endpoint to get current players
+// New endpoint to get current players from ALL servers
 app.post('/getplayers', (req, res) => {
     if (req.body.secret !== SECRET) {
         return res.status(403).json({ error: 'Invalid secret' });
     }
     
+    // Combine all players from all servers
+    let allPlayers = [];
+    let serverCount = 0;
+    
+    for (const [jobId, serverData] of Object.entries(serverPlayerData)) {
+        serverCount++;
+        for (const player of serverData.players) {
+            // Add server info to each player
+            allPlayers.push({
+                ...player,
+                serverId: jobId.substring(0, 8) // Shortened JobId for display
+            });
+        }
+    }
+    
+    // Remove duplicates (in case a player appears in multiple servers somehow)
+    const uniquePlayers = [];
+    const seenUserIds = new Set();
+    
+    for (const player of allPlayers) {
+        if (!seenUserIds.has(player.userId)) {
+            seenUserIds.add(player.userId);
+            uniquePlayers.push(player);
+        }
+    }
+    
+    console.log(`📋 Player list requested - ${uniquePlayers.length} unique players across ${serverCount} servers`);
+    
     res.json({
         success: true,
-        playerCount: currentPlayers.length,
-        players: currentPlayers
+        playerCount: uniquePlayers.length,
+        serverCount: serverCount,
+        players: uniquePlayers
     });
 });
 
