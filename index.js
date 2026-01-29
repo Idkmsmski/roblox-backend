@@ -50,7 +50,7 @@ app.get('/', (req, res) => {
     });
 });
 
-// New endpoint to receive player list from Roblox (with JobId to identify server)
+// New endpoint to receive player list from Roblox (with JobId and PlaceId)
 app.post('/updateplayers', (req, res) => {
     if (req.body.secret !== SECRET) {
         return res.status(403).json({ error: 'Invalid secret' });
@@ -65,9 +65,11 @@ app.post('/updateplayers', (req, res) => {
     }
     
     const jobId = req.body.jobId;
+    const placeId = req.body.placeId || 'Unknown';
     
     serverPlayerData[jobId] = {
         players: req.body.players,
+        placeId: placeId,
         lastUpdate: Date.now()
     };
     
@@ -77,7 +79,7 @@ app.post('/updateplayers', (req, res) => {
         totalPlayers += serverData.players.length;
     }
     
-    console.log(`👥 Updated server ${jobId.substring(0, 8)}... - ${req.body.players.length} players (Total: ${totalPlayers} across ${Object.keys(serverPlayerData).length} servers)`);
+    console.log(`👥 Updated server ${jobId.substring(0, 8)}... (Place: ${placeId}) - ${req.body.players.length} players (Total: ${totalPlayers} across ${Object.keys(serverPlayerData).length} servers)`);
     
     res.json({ 
         success: true, 
@@ -96,14 +98,24 @@ app.post('/getplayers', (req, res) => {
     // Combine all players from all servers
     let allPlayers = [];
     let serverCount = 0;
+    let placeMap = {}; // Track unique places
     
     for (const [jobId, serverData] of Object.entries(serverPlayerData)) {
         serverCount++;
+        const placeId = serverData.placeId || 'Unknown';
+        
+        // Count places
+        if (!placeMap[placeId]) {
+            placeMap[placeId] = 0;
+        }
+        placeMap[placeId]++;
+        
         for (const player of serverData.players) {
-            // Add server info to each player
+            // Add server info and place info to each player
             allPlayers.push({
                 ...player,
-                serverId: jobId.substring(0, 8) // Shortened JobId for display
+                serverId: jobId.substring(0, 8), // Shortened JobId for display
+                placeId: placeId
             });
         }
     }
@@ -119,12 +131,13 @@ app.post('/getplayers', (req, res) => {
         }
     }
     
-    console.log(`📋 Player list requested - ${uniquePlayers.length} unique players across ${serverCount} servers`);
+    console.log(`📋 Player list requested - ${uniquePlayers.length} unique players across ${serverCount} servers in ${Object.keys(placeMap).length} place(s)`);
     
     res.json({
         success: true,
         playerCount: uniquePlayers.length,
         serverCount: serverCount,
+        placeCount: Object.keys(placeMap).length,
         players: uniquePlayers
     });
 });
