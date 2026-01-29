@@ -18,13 +18,47 @@ const SECRET = "ZpwHC?h!ZL09n8&_g-3$P32u£o";
 
 let commandQueue = [];
 let banDatabase = {};
+let currentPlayers = []; // Store current players in the game
 
 app.get('/', (req, res) => {
     res.json({ 
         status: 'online', 
         queueSize: commandQueue.length,
         totalBans: Object.keys(banDatabase).length,
+        currentPlayers: currentPlayers.length,
         message: 'Roblox Ban System API'
+    });
+});
+
+// New endpoint to receive player list from Roblox
+app.post('/updateplayers', (req, res) => {
+    if (req.body.secret !== SECRET) {
+        return res.status(403).json({ error: 'Invalid secret' });
+    }
+    
+    if (!Array.isArray(req.body.players)) {
+        return res.status(400).json({ error: 'Players must be an array' });
+    }
+    
+    currentPlayers = req.body.players;
+    console.log(`👥 Updated player list - ${currentPlayers.length} players online`);
+    
+    res.json({ 
+        success: true, 
+        playerCount: currentPlayers.length 
+    });
+});
+
+// New endpoint to get current players
+app.post('/getplayers', (req, res) => {
+    if (req.body.secret !== SECRET) {
+        return res.status(403).json({ error: 'Invalid secret' });
+    }
+    
+    res.json({
+        success: true,
+        playerCount: currentPlayers.length,
+        players: currentPlayers
     });
 });
 
