@@ -20,6 +20,20 @@ let commandQueue = [];
 let banDatabase = {};
 let serverPlayerData = {}; // Store players by server JobId
 
+// How long commands stay in the queue so all servers can pick them up (60 seconds)
+const COMMAND_EXPIRY_MS = 60000;
+
+// Clean up expired commands from the queue every 30 seconds
+setInterval(() => {
+    const now = Date.now();
+    const before = commandQueue.length;
+    commandQueue = commandQueue.filter(cmd => now - cmd.timestamp < COMMAND_EXPIRY_MS);
+    const removed = before - commandQueue.length;
+    if (removed > 0) {
+        console.log(`🗑️ Removed ${removed} expired command(s) from queue`);
+    }
+}, 30000);
+
 // Clean up inactive servers (servers that haven't updated in 2 minutes)
 setInterval(() => {
     const now = Date.now();
@@ -234,16 +248,22 @@ app.post('/banlist', (req, res) => {
     });
 });
 
+// FIX: Instead of consuming and clearing the queue, each server sends its own
+// lastProcessed timestamp. We only return commands newer than that.
+// Commands expire after COMMAND_EXPIRY_MS so the queue doesn't grow forever.
+// This way ALL servers see ALL commands, not just whichever one polls first.
 app.post('/checkbans', (req, res) => {
     if (req.body.secret !== SECRET) {
         return res.status(403).json({ error: 'Invalid secret' });
     }
-    
-    const commands = [...commandQueue];
-    commandQueue = [];
-    
-    console.log(`✅ Sent ${commands.length} commands to Roblox`);
-    
+
+    const lastProcessed = req.body.lastProcessed || 0;
+
+    // Return only commands that are newer than what this server has already seen
+    const commands = commandQueue.filter(cmd => cmd.timestamp > lastProcessed);
+
+    console.log(`✅ Sent ${commands.length} commands to server (lastProcessed: ${lastProcessed}, queue size: ${commandQueue.length})`);
+
     res.json(commands);
 });
 
