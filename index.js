@@ -47,6 +47,23 @@ setInterval(() => {
     }
 }, 60000); // Run every minute
 
+// ✅ ADDED: Cleanup expired temp bans from memory every 5 minutes
+setInterval(() => {
+    const now = Date.now();
+    let removed = 0;
+    
+    for (const [userId, banData] of Object.entries(banDatabase)) {
+        if (banData.expiresAt && now >= banData.expiresAt) {
+            delete banDatabase[userId];
+            removed++;
+        }
+    }
+    
+    if (removed > 0) {
+        console.log(`🗑️ Removed ${removed} expired temp ban(s) from memory`);
+    }
+}, 300000); // Every 5 minutes
+
 app.get('/', (req, res) => {
     // Count total players across all servers
     let totalPlayers = 0;
@@ -60,7 +77,7 @@ app.get('/', (req, res) => {
         totalBans: Object.keys(banDatabase).length,
         currentPlayers: totalPlayers,
         activeServers: Object.keys(serverPlayerData).length,
-        message: 'Roblox Ban System API'
+        message: 'Roblox Ban System API - Optimized (no polling)'
     });
 });
 
@@ -231,9 +248,11 @@ app.post('/banlist', (req, res) => {
     const now = Date.now();
     const activeBans = [];
     
+    // ✅ Auto-cleanup expired bans when banlist is requested
     for (const [userId, banData] of Object.entries(banDatabase)) {
         if (banData.expiresAt && now >= banData.expiresAt) {
             delete banDatabase[userId];
+            console.log(`🗑️ Auto-removed expired tempban for user ${userId}`);
             continue;
         }
         activeBans.push(banData);
@@ -248,10 +267,9 @@ app.post('/banlist', (req, res) => {
     });
 });
 
-// FIX: Instead of consuming and clearing the queue, each server sends its own
-// lastProcessed timestamp. We only return commands newer than that.
-// Commands expire after COMMAND_EXPIRY_MS so the queue doesn't grow forever.
-// This way ALL servers see ALL commands, not just whichever one polls first.
+// Each server sends its own lastProcessed timestamp
+// We only return commands newer than that timestamp
+// This way ALL servers see ALL commands
 app.post('/checkbans', (req, res) => {
     if (req.body.secret !== SECRET) {
         return res.status(403).json({ error: 'Invalid secret' });
@@ -276,6 +294,7 @@ app.get('/queue', (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`💰 Optimized version - temp bans expire automatically in Roblox`);
 });
 
 process.on('SIGTERM', () => {
