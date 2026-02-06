@@ -226,7 +226,9 @@ app.post('/ban', (req, res) => {
             bannedAt: Date.now()
         };
     } else if (req.body.action === 'unban') {
+        // ✅ Remove from backend banDatabase (handles both regular and expired tempbans)
         delete banDatabase[req.body.userId];
+        console.log(`✅ Removed user ${req.body.userId} from banDatabase`);
     }
     
     commandQueue.push(command);
@@ -247,23 +249,30 @@ app.post('/banlist', (req, res) => {
     
     const now = Date.now();
     const activeBans = [];
+    const expiredBans = [];
     
     // ✅ Auto-cleanup expired bans when banlist is requested
     for (const [userId, banData] of Object.entries(banDatabase)) {
         if (banData.expiresAt && now >= banData.expiresAt) {
             delete banDatabase[userId];
-            console.log(`🗑️ Auto-removed expired tempban for user ${userId}`);
+            expiredBans.push(userId);
+            console.log(`🗑️ Auto-removed expired tempban for user ${userId} from banDatabase`);
             continue;
         }
         activeBans.push(banData);
     }
     
-    console.log(`📋 Banlist requested - ${activeBans.length} active bans`);
+    if (expiredBans.length > 0) {
+        console.log(`📋 Banlist requested - ${activeBans.length} active bans, cleaned up ${expiredBans.length} expired`);
+    } else {
+        console.log(`📋 Banlist requested - ${activeBans.length} active bans`);
+    }
     
     res.json({
         success: true,
         totalBans: activeBans.length,
-        bans: activeBans
+        bans: activeBans,
+        expiredCleaned: expiredBans.length
     });
 });
 
