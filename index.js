@@ -77,7 +77,7 @@ app.get('/', (req, res) => {
         totalBans: Object.keys(banDatabase).length,
         currentPlayers: totalPlayers,
         activeServers: Object.keys(serverPlayerData).length,
-        message: 'Roblox Ban System API - Optimized (no polling)'
+        message: 'SAB PVP Trainers Ban System API'
     });
 });
 
