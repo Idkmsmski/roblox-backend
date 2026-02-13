@@ -173,6 +173,40 @@ app.post('/getplayers', (req, res) => {
     });
 });
 
+// ✅ NEW: Add wins endpoint
+app.post('/addwins', (req, res) => {
+    console.log('Received addwins request:', req.body);
+    
+    if (req.body.secret !== SECRET) {
+        return res.status(403).json({ error: 'Invalid secret' });
+    }
+    
+    if (!req.body.userId) {
+        return res.status(400).json({ error: 'Missing userId' });
+    }
+    
+    if (!req.body.amount || isNaN(req.body.amount)) {
+        return res.status(400).json({ error: 'Missing or invalid amount' });
+    }
+    
+    const command = {
+        action: 'addwins',
+        userId: req.body.userId,
+        amount: parseInt(req.body.amount),
+        timestamp: Date.now()
+    };
+    
+    commandQueue.push(command);
+    
+    console.log(`✅ Added addwins command for user ${req.body.userId} (${req.body.amount} wins)`);
+    console.log(`📊 Queue size: ${commandQueue.length}`);
+    
+    res.json({ 
+        success: true, 
+        message: `Added ${req.body.amount} wins to user ${req.body.userId}`
+    });
+});
+
 app.post('/ban', (req, res) => {
     console.log('Received ban request:', req.body);
     
